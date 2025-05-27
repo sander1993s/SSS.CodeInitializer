@@ -1,14 +1,15 @@
-﻿using Microsoft.CodeAnalysis.CodeActions;
-using Microsoft.CodeAnalysis.CodeRefactorings;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Text;
+﻿using CodeInitializer.CodeAnalysis;
+using CodeInitializer.Models;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CodeRefactorings;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 using System.Composition;
 using System.IO;
-using System.Threading.Tasks;
-using System.Threading;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SSS.CodeInitializer.Analysis
 {
@@ -37,20 +38,12 @@ namespace SSS.CodeInitializer.Analysis
 
             var interfaceSyntax = GenerateInterfaceSyntax(interfaceName, classDecl, ns);
 
-            var actionInFile = CodeAction.Create(
-                $"Generate interface '{interfaceName}' in this file",
-                ct => AddInterfaceToSameFileAsync(document, root, classDecl, interfaceSyntax, interfaceName, ct),
-                "GenerateInterface_SameFile"
-            );
-
-            var actionNewFile = CodeAction.Create(
-                $"Generate interface '{interfaceName}' in new file",
-                ct => AddInterfaceToNewFileAsync(document, classDecl, interfaceSyntax, interfaceName, ns, ct),
-                "GenerateInterface_NewFile"
-            );
-
-            context.RegisterRefactoring(actionInFile);
-            context.RegisterRefactoring(actionNewFile);
+            context.RegisterRefactoring(new GenerateInterfaceWithOptionsAction(
+                "Generate interface",
+                async (options, cancellationToken) =>
+                {
+                    return await GenerateAsync(options, document, root, classDecl, interfaceSyntax, interfaceName, cancellationToken);
+                }, classSymbol));
         }
 
         private InterfaceDeclarationSyntax GenerateInterfaceSyntax(string interfaceName, ClassDeclarationSyntax classDecl, string ns)
@@ -117,7 +110,8 @@ namespace SSS.CodeInitializer.Analysis
             return interfaceDecl;
         }
 
-        private async Task<Document> AddInterfaceToSameFileAsync(
+        private async Task<Document> GenerateAsync(
+            InterfaceGenerationOptions options,
             Document document,
             SyntaxNode root,
             ClassDeclarationSyntax classDecl,
