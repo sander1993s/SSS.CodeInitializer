@@ -46,10 +46,9 @@ namespace SSS.CodeInitializer.Analysis
         }
         private bool IsReturnTypeAnyTypeParameter(MethodDeclarationSyntax method, ClassDeclarationSyntax classDecl)
         {
-            // Class type parameters
             var classTypeParams = classDecl.TypeParameterList?.Parameters.Select(tp => tp.Identifier.Text).ToHashSet()
                                   ?? new HashSet<string>();
-            // Method type parameters
+
             var methodTypeParams = method.TypeParameterList?.Parameters.Select(tp => tp.Identifier.Text).ToHashSet()
                                    ?? new HashSet<string>();
 
@@ -60,8 +59,6 @@ namespace SSS.CodeInitializer.Analysis
             }
             return false;
         }
-
-
 
         private InterfaceDeclarationSyntax GenerateInterfaceSyntax(
             string interfaceName,
@@ -76,29 +73,23 @@ namespace SSS.CodeInitializer.Analysis
                     m is EventDeclarationSyntax ||
                     m is EventFieldDeclarationSyntax
                 )
-                .Where(m => !m.Modifiers.Any(SyntaxKind.PrivateKeyword) && !m.Modifiers.Any(SyntaxKind.StaticKeyword))
+                .Where(m => m.Modifiers.Any(SyntaxKind.PublicKeyword) && !m.Modifiers.Any(SyntaxKind.StaticKeyword))
                 .Where(m =>
                     includeGenericMembers
                     ||
                     (
-                        // For methods
                         (m is MethodDeclarationSyntax md
-                            // If not generic, always allow
                             ? (md.TypeParameterList == null || md.TypeParameterList.Parameters.Count == 0)
-                                // If generic, allow only if return type is not a type parameter
                                 || !IsReturnTypeAnyTypeParameter(md, classDecl)
                             : true)
-                        // For properties
                         && (m is PropertyDeclarationSyntax pd
                             ? !(pd.Type is IdentifierNameSyntax idProp
                                 && classDecl.TypeParameterList?.Parameters.Any(tp => tp.Identifier.Text == idProp.Identifier.Text) == true)
                             : true)
-                        // For event declarations
                         && (m is EventDeclarationSyntax ed
                             ? !(ed.Type is IdentifierNameSyntax idEvt
                                 && classDecl.TypeParameterList?.Parameters.Any(tp => tp.Identifier.Text == idEvt.Identifier.Text) == true)
                             : true)
-                        // For event field declarations
                         && (m is EventFieldDeclarationSyntax efd
                             ? !(efd.Declaration.Type is IdentifierNameSyntax idEfd
                                 && classDecl.TypeParameterList?.Parameters.Any(tp => tp.Identifier.Text == idEfd.Identifier.Text) == true)
@@ -157,6 +148,13 @@ namespace SSS.CodeInitializer.Analysis
                 .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                 .WithMembers(SyntaxFactory.List(members));
 
+            if (includeGenericMembers && classDecl.TypeParameterList != null)
+            {
+                interfaceDecl = interfaceDecl
+                    .WithTypeParameterList(classDecl.TypeParameterList)
+                    .WithConstraintClauses(classDecl.ConstraintClauses);
+            }
+
             return interfaceDecl;
         }
 
@@ -171,18 +169,7 @@ namespace SSS.CodeInitializer.Analysis
         {
 
             var interfaceDecl = GenerateInterfaceSyntax(interfaceName, classDecl, nameSpace, options.IncludeGenerics);
-
-            // Update the class declaration to implement the interface
-            var classWithInterface = classDecl;
-            var implemented = classDecl.BaseList?.Types
-                .Any(bt => bt.Type.ToString() == interfaceName) ?? false;
-            if (!implemented)
-            {
-                var newBaseList = classDecl.BaseList ?? SyntaxFactory.BaseList();
-                var newType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(interfaceName));
-                var updatedBaseList = newBaseList.AddTypes(newType);
-                classWithInterface = classDecl.WithBaseList(updatedBaseList);
-            }
+            var classWithInterface = AddInterfaceImplementation(classDecl, interfaceName, options.IncludeGenerics);
 
             SyntaxNode newRoot = null;
 
@@ -245,7 +232,8 @@ namespace SSS.CodeInitializer.Analysis
             }
             var sourceText = cu.NormalizeWhitespace().ToFullString();
 
-            var updatedDocument = await ImplementInterfaceOnClassAsync(document, interfaceName, classDecl, cancellationToken);
+            var updatedDocument = await
+                ImplementInterfaceOnClassAsync(document, interfaceName, classDecl, cancellationToken);
             var updatedSolution = updatedDocument.Project.Solution;
 
             var newDocId = DocumentId.CreateNewId(document.Project.Id);
@@ -253,8 +241,6 @@ namespace SSS.CodeInitializer.Analysis
 
             return updatedSolution;
         }
-
-
 
         private async Task<Document> ImplementInterfaceOnClassAsync(
             Document document,
@@ -280,5 +266,73 @@ namespace SSS.CodeInitializer.Analysis
 
             return document.WithSyntaxRoot(root);
         }
+
+        public static ClassDeclarationSyntax AddInterfaceImplementation(
+            ClassDeclarationSyntax classDecl,
+            string interfaceName,
+            bool includeGenericMembers)
+        {
+            // Compose the correct interface type name
+            BaseTypeSyntax interfaceType;
+
+            if (includeGenericMembers && classDecl.TypeParameterList != null)
+            {
+                // Interface is generic, mirror the type parameters in order
+                var typeArgs = classDecl.TypeParameterList.Parameters
+                    .Select(tp => SyntaxFactory.TypeArgumentList(
+                        SyntaxFactory.SeparatedList<TypeSyntax>(
+                            new[] { SyntaxFactory.IdentifierName(tp.Identifier.Text) }
+                        ))).ToList();
+
+                var interfaceGenericName = SyntaxFactory.GenericName(
+                    SyntaxFactory.Identifier(interfaceName),
+                    SyntaxFactory.TypeArgumentList(
+                        SyntaxFactory.SeparatedList<TypeSyntax>(
+                            classDecl.TypeParameterList.Parameters
+                                .Select(tp => SyntaxFactory.IdentifierName(tp.Identifier.Text))
+                        )
+                    )
+                );
+
+                interfaceType = SyntaxFactory.SimpleBaseType(interfaceGenericName);
+            }
+            else
+            {
+                // Interface is not generic
+                interfaceType = SyntaxFactory.SimpleBaseType(SyntaxFactory.IdentifierName(interfaceName));
+            }
+
+            // Check if already implemented
+            bool alreadyImplemented = classDecl.BaseList != null &&
+                classDecl.BaseList.Types.Any(bt =>
+                {
+                    var name = bt.Type.ToString();
+                    // Match both generic and non-generic versions
+                    return name.StartsWith(interfaceName);
+                });
+
+            if (alreadyImplemented)
+                return classDecl; // Do nothing if already present
+
+            // Build new base list
+            BaseListSyntax newBaseList;
+
+            if (classDecl.BaseList == null)
+            {
+                // No base list yet
+                newBaseList = SyntaxFactory.BaseList(
+                    SyntaxFactory.SeparatedList(new[] { interfaceType })
+                );
+            }
+            else
+            {
+                // Add to existing base list
+                newBaseList = classDecl.BaseList.AddTypes(interfaceType);
+            }
+
+            // Return class with updated base list
+            return classDecl.WithBaseList(newBaseList);
+        }
+
     }
 }
