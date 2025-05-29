@@ -1,6 +1,7 @@
 ﻿using CodeInitializer.CodeAnalysis;
 using CodeInitializer.Models;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeRefactorings;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -14,6 +15,10 @@ using System.Threading.Tasks;
 
 namespace SSS.CodeInitializer.Analysis
 {
+    //to new file
+    //sync interface
+    //handle partial classes
+
     [ExportCodeRefactoringProvider(LanguageNames.CSharp, Name = nameof(GenerateInterfaceRefactoringProvider)), Shared]
     public class GenerateInterfaceRefactoringProvider : CodeRefactoringProvider
     {
@@ -37,13 +42,25 @@ namespace SSS.CodeInitializer.Analysis
 
             var ns = classSymbol.ContainingNamespace.IsGlobalNamespace ? null : classSymbol.ContainingNamespace.ToDisplayString();
 
-            context.RegisterRefactoring(new GenerateInterfaceWithOptionsAction(
-                "Generate interface",
+            if (ClassContainsGenericMembers(classDecl))
+            {
+                context.RegisterRefactoring(new GenerateInterfaceWithOptionsAction(
+                "Generate interface in this file",
                 async (options, cancellationToken) =>
                 {
                     return await GenerateAsync(options, document, root, classDecl, interfaceName, cancellationToken, ns);
                 }, classSymbol));
+            }
+            else
+            {
+                context.RegisterRefactoring(CodeAction.Create(
+                    $"Generate interface '{interfaceName}' in this file",
+                    cancellationToken => GenerateAsync(new InterfaceGenerationOptions(), document, root, classDecl, interfaceName, cancellationToken, ns),
+                    "GenerateInterface_SameFile"
+                ));
+            }
         }
+
         private bool IsReturnTypeAnyTypeParameter(MethodDeclarationSyntax method, ClassDeclarationSyntax classDecl)
         {
             var classTypeParams = classDecl.TypeParameterList?.Parameters.Select(tp => tp.Identifier.Text).ToHashSet()
@@ -332,6 +349,45 @@ namespace SSS.CodeInitializer.Analysis
 
             // Return class with updated base list
             return classDecl.WithBaseList(newBaseList);
+        }
+
+        private static bool ClassContainsGenericMembers(ClassDeclarationSyntax classDecl)
+        {
+            var classTypeParameters = classDecl.TypeParameterList?.Parameters
+                .Select(tp => tp.Identifier.Text)
+                .ToHashSet() ?? new HashSet<string>();
+
+            foreach (var member in classDecl.Members)
+            {
+                switch (member)
+                {
+                    case MethodDeclarationSyntax method:
+                        // Method is generic if it declares its own type parameters
+                        if (method.TypeParameterList != null && method.TypeParameterList.Parameters.Count > 0)
+                            return true;
+                        // Or if return type is class type parameter
+                        if (method.ReturnType is IdentifierNameSyntax id
+                            && classTypeParameters.Contains(id.Identifier.Text))
+                            return true;
+                        break;
+                    case PropertyDeclarationSyntax prop:
+                        if (prop.Type is IdentifierNameSyntax idProp
+                            && classTypeParameters.Contains(idProp.Identifier.Text))
+                            return true;
+                        break;
+                    case EventDeclarationSyntax evt:
+                        if (evt.Type is IdentifierNameSyntax idEvt
+                            && classTypeParameters.Contains(idEvt.Identifier.Text))
+                            return true;
+                        break;
+                    case EventFieldDeclarationSyntax evf:
+                        if (evf.Declaration.Type is IdentifierNameSyntax idEfd
+                            && classTypeParameters.Contains(idEfd.Identifier.Text))
+                            return true;
+                        break;
+                }
+            }
+            return false;
         }
 
     }
