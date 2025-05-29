@@ -1,9 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="CodeInitializer.49bbc154-1981-4967-a6ef-c20373f7062d" Version="2.0" Language="en-US" Publisher="Smet Software Solution" />
-        <DisplayName>CodeInitializer</DisplayName>
-        <Description>Empty VSIX Project.</Description>
+        <Identity Id="CodeInitializer.49bbc154-1981-4967-a6ef-c20373f7062d" Version="1.0.0" Language="en-US" Publisher="Smet Software Solutions" />
+        <DisplayName>C# Code Initializer</DisplayName>
+        <Description xml:space="preserve">Generate Interfaces and Initialize Properties – C# Productivity Tools
+
+A Visual Studio extension to generate interfaces from your C# classes (with full support for generics), and to instantly generate property initializers in object initializers with a single refactoring. Streamline your workflow and keep your code clean.</Description>
+        <License>license.txt</License>
+        <ReleaseNotes>release.html</ReleaseNotes>
+        <Icon>Images\preview.png</Icon>
+        <PreviewImage>Images\preview.png</PreviewImage>
+        <Tags>
+            C# interface interface-generator code-generation property-initializer object-initializer refactoring productivity roslyn visual-studio developer-tools code-fix code-actions
+        </Tags>
+
+        <Preview>true</Preview>
     </Metadata>
     <Installation>
         <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0, 18.0)">

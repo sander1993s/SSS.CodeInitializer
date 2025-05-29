@@ -1,0 +1,42 @@
+﻿<h1>Changelog</h1>
+
+<h2>[1.0.0] – 2025-05-29</h2>
+
+<h3>🚀 Initial Release</h3>
+
+<h4>Features</h4>
+<ul>
+    <li>
+        <strong>Generate Interfaces from Classes</strong>
+        <ul>
+            <li>Create interfaces from any C# class using a context menu or code action.</li>
+            <li>Supports classes with generic type parameters (<code>class MyClass&lt;T&gt;</code>) and generic methods.</li>
+            <li>Optionally include or exclude generic members in the generated interface.</li>
+            <li>Generated interfaces mirror the class’s type parameters (e.g., <code>IMyClass&lt;T, TBody&gt;</code> for <code>MyClass&lt;T, TBody&gt;</code>).</li>
+            <li>Automatically adds the generated interface to the class declaration.</li>
+        </ul>
+    </li>
+    <li>
+        <strong>Property Initializer Refactoring</strong>
+        <ul>
+            <li>Within an object initializer (e.g., <code>var s = new Person { }</code>), trigger a code action to automatically insert assignments for all public properties of the class.</li>
+            <li>Great for fast DTO, ViewModel, or test object construction.</li>
+        </ul>
+    </li>
+</ul>
+
+<h4>Other Details</h4>
+<ul>
+    <li>Powered by the Roslyn compiler platform for syntax-aware and reliable code transformations.</li>
+    <li>Designed for Visual Studio 2022 and later.</li>
+    <li><strong>Partial classes are not fully supported</strong> and only generate a partial interface in this version.</li>
+</ul>
+
+<hr />
+
+<p>
+    <strong>
+        Thank you for using this extension!<br>
+        Feedback, bug reports, and feature requests are welcome.
+    </strong>
+</p>

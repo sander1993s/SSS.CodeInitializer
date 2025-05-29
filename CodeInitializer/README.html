@@ -1,0 +1,78 @@
+﻿<h1>C# Code Initializer</h1>
+
+<p>
+    A Visual Studio extension to instantly generate interfaces from your C# classes and quickly initialize all properties in object initializers. Designed for productivity, best practices, and seamless workflow.
+</p>
+
+<hr />
+
+<h2>✨ Features</h2>
+<ul>
+    <li>
+        <strong>Generate Interfaces from Classes</strong>
+        <ul>
+            <li>Create interfaces from any C# class via context menu or code action.</li>
+            <li>Supports generic classes and methods.</li>
+            <li>Choose whether to include or exclude generic members.</li>
+            <li>Interfaces accurately mirror class type parameters (e.g., <code>IMyClass&lt;T, TBody&gt;</code> for <code>MyClass&lt;T, TBody&gt;</code>).</li>
+            <li>Automatically adds the generated interface to your class declaration.</li>
+        </ul>
+    </li>
+    <li>
+        <strong>Property Initializer Refactoring</strong>
+        <ul>
+            <li>Place your cursor inside an object initializer (e.g., <code>var s = new Person { }</code>) and use the code action to insert assignments for all public properties.</li>
+            <li>Perfect for rapid setup of DTOs, ViewModels, and test data.</li>
+        </ul>
+    </li>
+    <li>
+        <strong>Modern &amp; Reliable</strong>
+        <ul>
+            <li>Built with the Roslyn compiler platform for robust, syntax-aware transformations.</li>
+            <li>Designed for Visual Studio 2022 and later.</li>
+        </ul>
+    </li>
+</ul>
+
+<blockquote>
+    <strong>Note:</strong> Partial classes are not fully supported; only a partial interface will be generated if used.
+</blockquote>
+
+<hr />
+
+<h2>🚀 Getting Started</h2>
+<ol>
+    <li><strong>Install the Extension</strong> from the Visual Studio Marketplace.</li>
+    <li>
+        <strong>Generate an Interface:</strong>
+        <ul>
+            <li>Right-click a class in your C# code or use the lightbulb/code action menu.</li>
+            <li>Select “Generate Interface.”</li>
+            <li>Optionally choose to include generic members.</li>
+        </ul>
+    </li>
+    <li>
+        <strong>Initialize Properties in Object Initializer:</strong>
+        <ul>
+            <li>Place your cursor inside the <code>{}</code> of an object initializer.</li>
+            <li>Trigger the code action (lightbulb menu) and select “Initialize all properties.”</li>
+        </ul>
+    </li>
+</ol>
+
+<hr />
+
+<h2>📝 License</h2>
+<p>
+    <a href="https://opensource.org/licenses/MIT">MIT License</a>
+</p>
+
+<hr />
+
+<h2>💡 Feedback &amp; Contributions</h2>
+<p>
+    Feedback, bug reports, and feature requests are welcome via the
+    <a href="https://github.com/sander1993s/SSS.CodeInitializer/issues">GitHub issues page</a>
+    or the Visual Studio Marketplace.<br />
+    Enjoy faster, cleaner C# code!
+</p>
