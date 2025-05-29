@@ -11,14 +11,14 @@ using System.Threading.Tasks;
 
 namespace CodeInitializer.CodeAnalysis
 {
-    public class GenerateInterfaceWithOptionsAction : CodeActionWithOptions
+    public class GenerateInterfaceWithOptionsAction<T> : CodeActionWithOptions where T : class
     {
-        private readonly Func<InterfaceGenerationOptions, CancellationToken, Task<Document>> _createChangedDocument;
+        private readonly Func<InterfaceGenerationOptions, CancellationToken, Task<T>> _createChangedDocument;
         private readonly InterfaceGenerationOptions _options;
         private readonly INamedTypeSymbol _className;
         public GenerateInterfaceWithOptionsAction(
             string title,
-            Func<InterfaceGenerationOptions, CancellationToken, Task<Document>> createChangedDocument, INamedTypeSymbol classSymbol)
+            Func<InterfaceGenerationOptions, CancellationToken, Task<T>> createChangedDocument, INamedTypeSymbol classSymbol)
         {
             Title = title;
             _createChangedDocument = createChangedDocument;
@@ -49,7 +49,18 @@ namespace CodeInitializer.CodeAnalysis
             if (options is InterfaceGenerationOptions opts)
             {
                 var newDoc = await _createChangedDocument(opts, cancellationToken);
-                return new[] { new ApplyChangesOperation(newDoc.Project.Solution) };
+                if (newDoc is Document)
+                {
+                    return new[] { new ApplyChangesOperation((newDoc as Document).Project.Solution) };
+                }
+                else if(newDoc is Solution)
+                {
+                    return new[] { new ApplyChangesOperation(newDoc as Solution) };
+                }
+                else
+                {
+                    throw new InvalidOperationException("Result must be a Document or Solution.");
+                }
             }
 
             return Enumerable.Empty<CodeActionOperation>();

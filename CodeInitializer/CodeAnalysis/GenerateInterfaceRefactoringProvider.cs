@@ -15,7 +15,6 @@ using System.Threading.Tasks;
 
 namespace SSS.CodeInitializer.Analysis
 {
-    //to new file
     //sync interface
     //handle partial classes
 
@@ -42,21 +41,34 @@ namespace SSS.CodeInitializer.Analysis
 
             var ns = classSymbol.ContainingNamespace.IsGlobalNamespace ? null : classSymbol.ContainingNamespace.ToDisplayString();
 
-            if (ClassContainsGenericMembers(classDecl))
+            if (IsGenericClass(classDecl))
             {
-                context.RegisterRefactoring(new GenerateInterfaceWithOptionsAction(
-                "Generate interface in this file",
+                context.RegisterRefactoring(new GenerateInterfaceWithOptionsAction<Document>(
+                $"Generate interface '{interfaceName}' in this file",
                 async (options, cancellationToken) =>
                 {
-                    return await GenerateAsync(options, document, root, classDecl, interfaceName, cancellationToken, ns);
+                    return await GenerateInterfaceSameFileAsync(options, document, root, classDecl, interfaceName, cancellationToken);
+                }, classSymbol));
+
+                context.RegisterRefactoring(new GenerateInterfaceWithOptionsAction<Solution>(
+                $"Generate interface '{interfaceName}' in new file",
+                async (options, cancellationToken) =>
+                {
+                    return await GenerateInterfaceNewFileAsync(options, document, classDecl, interfaceName, cancellationToken, ns);
                 }, classSymbol));
             }
             else
             {
                 context.RegisterRefactoring(CodeAction.Create(
                     $"Generate interface '{interfaceName}' in this file",
-                    cancellationToken => GenerateAsync(new InterfaceGenerationOptions(), document, root, classDecl, interfaceName, cancellationToken, ns),
+                    cancellationToken => GenerateInterfaceSameFileAsync(new InterfaceGenerationOptions(), document, root, classDecl, interfaceName, cancellationToken),
                     "GenerateInterface_SameFile"
+                ));
+
+                context.RegisterRefactoring(CodeAction.Create(
+                    $"Generate interface '{interfaceName}' in new file",
+                    cancellationToken => GenerateInterfaceNewFileAsync(new InterfaceGenerationOptions(), document, classDecl, interfaceName, cancellationToken, ns),
+                    "GenerateInterface_NewFile"
                 ));
             }
         }
@@ -80,7 +92,6 @@ namespace SSS.CodeInitializer.Analysis
         private InterfaceDeclarationSyntax GenerateInterfaceSyntax(
             string interfaceName,
             ClassDeclarationSyntax classDecl,
-            string ns,
             bool includeGenericMembers)
         {
             var members = classDecl.Members
@@ -175,17 +186,16 @@ namespace SSS.CodeInitializer.Analysis
             return interfaceDecl;
         }
 
-        private async Task<Document> GenerateAsync(
+        private async Task<Document> GenerateInterfaceSameFileAsync(
             InterfaceGenerationOptions options,
             Document document,
             SyntaxNode root,
             ClassDeclarationSyntax classDecl,
             string interfaceName,
-            CancellationToken cancellationToken,
-            string nameSpace)
+            CancellationToken cancellationToken)
         {
 
-            var interfaceDecl = GenerateInterfaceSyntax(interfaceName, classDecl, nameSpace, options.IncludeGenerics);
+            var interfaceDecl = GenerateInterfaceSyntax(interfaceName, classDecl, options.IncludeGenerics);
             var classWithInterface = AddInterfaceImplementation(classDecl, interfaceName, options.IncludeGenerics);
 
             SyntaxNode newRoot = null;
@@ -214,6 +224,7 @@ namespace SSS.CodeInitializer.Analysis
                     newRoot = cu.WithMembers(SyntaxFactory.List(members));
                 }
             }
+
             if (newRoot == null)
             {
                 newRoot = root.InsertNodesBefore(classDecl, new[] { interfaceDecl })
@@ -224,23 +235,26 @@ namespace SSS.CodeInitializer.Analysis
         }
 
 
-        private async Task<Solution> AddInterfaceToNewFileAsync(
-    Document document,
-    ClassDeclarationSyntax classDecl,
-    InterfaceDeclarationSyntax interfaceDecl,
-    string interfaceName,
-    string ns,
-    CancellationToken cancellationToken)
+        private async Task<Solution> GenerateInterfaceNewFileAsync(
+            InterfaceGenerationOptions options,
+            Document document,
+            ClassDeclarationSyntax classDecl,
+            string interfaceName,
+            CancellationToken cancellationToken,
+            string nameSpace)
         {
             var docFolder = Path.GetDirectoryName(document.FilePath);
             var interfaceFileName = interfaceName + ".cs";
             var interfaceFilePath = Path.Combine(docFolder, interfaceFileName);
 
+            var interfaceDecl = GenerateInterfaceSyntax(interfaceName, classDecl, options.IncludeGenerics);
+            var classWithInterface = AddInterfaceImplementation(classDecl, interfaceName, options.IncludeGenerics);
+
             var cu = SyntaxFactory.CompilationUnit();
-            if (!string.IsNullOrEmpty(ns))
+            if (!string.IsNullOrEmpty(nameSpace))
             {
                 cu = cu.AddMembers(
-                    SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName(ns))
+                    SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName(nameSpace))
                         .WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(interfaceDecl)));
             }
             else
@@ -250,7 +264,8 @@ namespace SSS.CodeInitializer.Analysis
             var sourceText = cu.NormalizeWhitespace().ToFullString();
 
             var updatedDocument = await
-                ImplementInterfaceOnClassAsync(document, interfaceName, classDecl, cancellationToken);
+                ImplementInterfaceOnClassAsync(document, interfaceName, classWithInterface, cancellationToken);
+
             var updatedSolution = updatedDocument.Project.Solution;
 
             var newDocId = DocumentId.CreateNewId(document.Project.Id);
@@ -351,44 +366,10 @@ namespace SSS.CodeInitializer.Analysis
             return classDecl.WithBaseList(newBaseList);
         }
 
-        private static bool ClassContainsGenericMembers(ClassDeclarationSyntax classDecl)
+        bool IsGenericClass(ClassDeclarationSyntax classDecl)
         {
-            var classTypeParameters = classDecl.TypeParameterList?.Parameters
-                .Select(tp => tp.Identifier.Text)
-                .ToHashSet() ?? new HashSet<string>();
-
-            foreach (var member in classDecl.Members)
-            {
-                switch (member)
-                {
-                    case MethodDeclarationSyntax method:
-                        // Method is generic if it declares its own type parameters
-                        if (method.TypeParameterList != null && method.TypeParameterList.Parameters.Count > 0)
-                            return true;
-                        // Or if return type is class type parameter
-                        if (method.ReturnType is IdentifierNameSyntax id
-                            && classTypeParameters.Contains(id.Identifier.Text))
-                            return true;
-                        break;
-                    case PropertyDeclarationSyntax prop:
-                        if (prop.Type is IdentifierNameSyntax idProp
-                            && classTypeParameters.Contains(idProp.Identifier.Text))
-                            return true;
-                        break;
-                    case EventDeclarationSyntax evt:
-                        if (evt.Type is IdentifierNameSyntax idEvt
-                            && classTypeParameters.Contains(idEvt.Identifier.Text))
-                            return true;
-                        break;
-                    case EventFieldDeclarationSyntax evf:
-                        if (evf.Declaration.Type is IdentifierNameSyntax idEfd
-                            && classTypeParameters.Contains(idEfd.Identifier.Text))
-                            return true;
-                        break;
-                }
-            }
-            return false;
+            return classDecl.TypeParameterList != null &&
+                   classDecl.TypeParameterList.Parameters.Count > 0;
         }
-
     }
 }
