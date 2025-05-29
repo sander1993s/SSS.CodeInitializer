@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CodeRefactorings;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using System.Collections.Generic;
 using System.Composition;
 using System.IO;
 using System.Linq;
@@ -31,77 +32,126 @@ namespace SSS.CodeInitializer.Analysis
                 return;
 
             var interfaceName = "I" + classSymbol.Name;
-            if (classSymbol.ContainingType != null) // Don't offer on nested classes
+            if (classSymbol.ContainingType != null)
                 return;
 
             var ns = classSymbol.ContainingNamespace.IsGlobalNamespace ? null : classSymbol.ContainingNamespace.ToDisplayString();
-
-            var interfaceSyntax = GenerateInterfaceSyntax(interfaceName, classDecl, ns);
 
             context.RegisterRefactoring(new GenerateInterfaceWithOptionsAction(
                 "Generate interface",
                 async (options, cancellationToken) =>
                 {
-                    return await GenerateAsync(options, document, root, classDecl, interfaceSyntax, interfaceName, cancellationToken);
+                    return await GenerateAsync(options, document, root, classDecl, interfaceName, cancellationToken, ns);
                 }, classSymbol));
         }
+        private bool IsReturnTypeAnyTypeParameter(MethodDeclarationSyntax method, ClassDeclarationSyntax classDecl)
+        {
+            // Class type parameters
+            var classTypeParams = classDecl.TypeParameterList?.Parameters.Select(tp => tp.Identifier.Text).ToHashSet()
+                                  ?? new HashSet<string>();
+            // Method type parameters
+            var methodTypeParams = method.TypeParameterList?.Parameters.Select(tp => tp.Identifier.Text).ToHashSet()
+                                   ?? new HashSet<string>();
 
-        private InterfaceDeclarationSyntax GenerateInterfaceSyntax(string interfaceName, ClassDeclarationSyntax classDecl, string ns)
+            if (method.ReturnType is IdentifierNameSyntax id)
+            {
+                return classTypeParams.Contains(id.Identifier.Text)
+                    || methodTypeParams.Contains(id.Identifier.Text);
+            }
+            return false;
+        }
+
+
+
+        private InterfaceDeclarationSyntax GenerateInterfaceSyntax(
+            string interfaceName,
+            ClassDeclarationSyntax classDecl,
+            string ns,
+            bool includeGenericMembers)
         {
             var members = classDecl.Members
-      .Where(m =>
-          m is MethodDeclarationSyntax ||
-          m is PropertyDeclarationSyntax ||
-          m is EventDeclarationSyntax ||
-          m is EventFieldDeclarationSyntax
-      )
-      .Where(m => !m.Modifiers.Any(SyntaxKind.PrivateKeyword) && !m.Modifiers.Any(SyntaxKind.StaticKeyword))
-    .Select(m =>
-    {
-        if (m is MethodDeclarationSyntax method)
-        {
-            return (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(method.ReturnType, method.Identifier)
-                .WithParameterList(method.ParameterList)
-                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-                .WithModifiers(new SyntaxTokenList());
-        }
-        else if (m is PropertyDeclarationSyntax prop)
-        {
-            var accessorList = SyntaxFactory.AccessorList(
-                SyntaxFactory.List(
-                    prop.AccessorList?.Accessors
-                        .Where(a => a.Kind() == SyntaxKind.GetAccessorDeclaration || a.Kind() == SyntaxKind.SetAccessorDeclaration)
-                        .Select(a => SyntaxFactory.AccessorDeclaration(a.Kind())
-                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)))
-                        ?? Enumerable.Empty<AccessorDeclarationSyntax>()
+                .Where(m =>
+                    m is MethodDeclarationSyntax ||
+                    m is PropertyDeclarationSyntax ||
+                    m is EventDeclarationSyntax ||
+                    m is EventFieldDeclarationSyntax
                 )
-            );
-            return (MemberDeclarationSyntax)SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier)
-                .WithAccessorList(accessorList)
-                .WithModifiers(new SyntaxTokenList());
-        }
-        else if (m is EventDeclarationSyntax evt)
-        {
-            return (MemberDeclarationSyntax)SyntaxFactory.EventDeclaration(evt.Type, evt.Identifier)
-                .WithAccessorList(evt.AccessorList)
-                .WithModifiers(new SyntaxTokenList());
-        }
-        else if (m is EventFieldDeclarationSyntax evf)
-        {
-            var declarator = evf.Declaration.Variables.FirstOrDefault();
-            if (declarator != null)
-            {
-                return (MemberDeclarationSyntax)SyntaxFactory.EventFieldDeclaration(
-                    SyntaxFactory.VariableDeclaration(evf.Declaration.Type)
-                        .WithVariables(SyntaxFactory.SingletonSeparatedList(declarator))
-                ).WithModifiers(new SyntaxTokenList());
-            }
-        }
-        return null;
-    })
-.Where(x => x != null)
-.ToList();
-
+                .Where(m => !m.Modifiers.Any(SyntaxKind.PrivateKeyword) && !m.Modifiers.Any(SyntaxKind.StaticKeyword))
+                .Where(m =>
+                    includeGenericMembers
+                    ||
+                    (
+                        // For methods
+                        (m is MethodDeclarationSyntax md
+                            // If not generic, always allow
+                            ? (md.TypeParameterList == null || md.TypeParameterList.Parameters.Count == 0)
+                                // If generic, allow only if return type is not a type parameter
+                                || !IsReturnTypeAnyTypeParameter(md, classDecl)
+                            : true)
+                        // For properties
+                        && (m is PropertyDeclarationSyntax pd
+                            ? !(pd.Type is IdentifierNameSyntax idProp
+                                && classDecl.TypeParameterList?.Parameters.Any(tp => tp.Identifier.Text == idProp.Identifier.Text) == true)
+                            : true)
+                        // For event declarations
+                        && (m is EventDeclarationSyntax ed
+                            ? !(ed.Type is IdentifierNameSyntax idEvt
+                                && classDecl.TypeParameterList?.Parameters.Any(tp => tp.Identifier.Text == idEvt.Identifier.Text) == true)
+                            : true)
+                        // For event field declarations
+                        && (m is EventFieldDeclarationSyntax efd
+                            ? !(efd.Declaration.Type is IdentifierNameSyntax idEfd
+                                && classDecl.TypeParameterList?.Parameters.Any(tp => tp.Identifier.Text == idEfd.Identifier.Text) == true)
+                            : true)
+                    )
+                )
+                .Select(m =>
+                {
+                    if (m is MethodDeclarationSyntax method)
+                    {
+                        return (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(method.ReturnType, method.Identifier)
+                            .WithParameterList(method.ParameterList)
+                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                            .WithModifiers(new SyntaxTokenList())
+                            .WithTypeParameterList(method.TypeParameterList)
+                            .WithConstraintClauses(method.ConstraintClauses);
+                    }
+                    else if (m is PropertyDeclarationSyntax prop)
+                    {
+                        var accessorList = SyntaxFactory.AccessorList(
+                            SyntaxFactory.List(
+                                prop.AccessorList?.Accessors
+                                    .Where(a => a.Kind() == SyntaxKind.GetAccessorDeclaration || a.Kind() == SyntaxKind.SetAccessorDeclaration)
+                                    .Select(a => SyntaxFactory.AccessorDeclaration(a.Kind())
+                                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)))
+                                    ?? Enumerable.Empty<AccessorDeclarationSyntax>()
+                            )
+                        );
+                        return (MemberDeclarationSyntax)SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier)
+                            .WithAccessorList(accessorList)
+                            .WithModifiers(new SyntaxTokenList());
+                    }
+                    else if (m is EventDeclarationSyntax evt)
+                    {
+                        return (MemberDeclarationSyntax)SyntaxFactory.EventDeclaration(evt.Type, evt.Identifier)
+                            .WithAccessorList(evt.AccessorList)
+                            .WithModifiers(new SyntaxTokenList());
+                    }
+                    else if (m is EventFieldDeclarationSyntax evf)
+                    {
+                        var declarator = evf.Declaration.Variables.FirstOrDefault();
+                        if (declarator != null)
+                        {
+                            return (MemberDeclarationSyntax)SyntaxFactory.EventFieldDeclaration(
+                                SyntaxFactory.VariableDeclaration(evf.Declaration.Type)
+                                    .WithVariables(SyntaxFactory.SingletonSeparatedList(declarator))
+                            ).WithModifiers(new SyntaxTokenList());
+                        }
+                    }
+                    return null;
+                })
+                .Where(x => x != null)
+                .ToList();
 
             var interfaceDecl = SyntaxFactory.InterfaceDeclaration(interfaceName)
                 .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
@@ -115,10 +165,13 @@ namespace SSS.CodeInitializer.Analysis
             Document document,
             SyntaxNode root,
             ClassDeclarationSyntax classDecl,
-            InterfaceDeclarationSyntax interfaceDecl,
             string interfaceName,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string nameSpace)
         {
+
+            var interfaceDecl = GenerateInterfaceSyntax(interfaceName, classDecl, nameSpace, options.IncludeGenerics);
+
             // Update the class declaration to implement the interface
             var classWithInterface = classDecl;
             var implemented = classDecl.BaseList?.Types
