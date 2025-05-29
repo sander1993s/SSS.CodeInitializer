@@ -15,9 +15,6 @@ using System.Threading.Tasks;
 
 namespace SSS.CodeInitializer.Analysis
 {
-    //sync interface
-    //handle partial classes
-
     [ExportCodeRefactoringProvider(LanguageNames.CSharp, Name = nameof(GenerateInterfaceRefactoringProvider)), Shared]
     public class GenerateInterfaceRefactoringProvider : CodeRefactoringProvider
     {
@@ -40,6 +37,13 @@ namespace SSS.CodeInitializer.Analysis
                 return;
 
             var ns = classSymbol.ContainingNamespace.IsGlobalNamespace ? null : classSymbol.ContainingNamespace.ToDisplayString();
+
+            var compilation = await document.Project.GetCompilationAsync(context.CancellationToken).ConfigureAwait(false);
+            var interfaceSymbol = compilation.GetTypeByMetadataName($"{ns}.{interfaceName}");
+            if(interfaceSymbol != null)
+            {
+                return;
+            }
 
             if (IsGenericClass(classDecl))
             {
