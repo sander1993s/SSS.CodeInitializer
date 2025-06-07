@@ -242,21 +242,26 @@ namespace CodeInitializer
 
 
         private async Task<Solution> GenerateInterfaceNewFileAsync(
-            InterfaceGenerationOptions options,
-            Document document,
-            ClassDeclarationSyntax classDecl,
-            string interfaceName,
-            CancellationToken cancellationToken,
-            string nameSpace)
+     InterfaceGenerationOptions options,
+     Document document,
+     ClassDeclarationSyntax classDecl,
+     string interfaceName,
+     CancellationToken cancellationToken,
+     string nameSpace)
         {
             var docFolder = Path.GetDirectoryName(document.FilePath);
             var interfaceFileName = interfaceName + ".cs";
             var interfaceFilePath = Path.Combine(docFolder, interfaceFileName);
 
             var interfaceDecl = GenerateInterfaceSyntax(interfaceName, classDecl, options.IncludeGenerics);
-            var classWithInterface = AddInterfaceImplementation(classDecl, interfaceName, options.IncludeGenerics);
 
-            var cu = SyntaxFactory.CompilationUnit();
+            var originalRoot = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
+            var compilationUnit = originalRoot as CompilationUnitSyntax;
+
+            var requiredUsings = compilationUnit?.Usings ?? SyntaxFactory.List<UsingDirectiveSyntax>();
+
+            var cu = SyntaxFactory.CompilationUnit().WithUsings(requiredUsings);
+
             if (!string.IsNullOrEmpty(nameSpace))
             {
                 cu = cu.AddMembers(
@@ -267,42 +272,19 @@ namespace CodeInitializer
             {
                 cu = cu.AddMembers(interfaceDecl);
             }
+
             var sourceText = cu.NormalizeWhitespace().ToFullString();
 
-            var updatedDocument = await
-                ImplementInterfaceOnClassAsync(document, interfaceName, classWithInterface, cancellationToken);
+            var classWithInterface = AddInterfaceImplementation(classDecl, interfaceName, options.IncludeGenerics);
 
+            var newRoot = originalRoot.ReplaceNode(classDecl, classWithInterface);
+            var updatedDocument = document.WithSyntaxRoot(newRoot);
             var updatedSolution = updatedDocument.Project.Solution;
 
             var newDocId = DocumentId.CreateNewId(document.Project.Id);
             updatedSolution = updatedSolution.AddDocument(newDocId, interfaceFileName, SourceText.From(sourceText), filePath: interfaceFilePath);
 
             return updatedSolution;
-        }
-
-        private async Task<Document> ImplementInterfaceOnClassAsync(
-            Document document,
-            string interfaceName,
-            ClassDeclarationSyntax classDecl,
-            CancellationToken cancellationToken)
-        {
-            var root = await document.GetSyntaxRootAsync(cancellationToken);
-            var newClassDecl = classDecl;
-
-            var implemented = classDecl.BaseList?.Types
-                .Any(bt => bt.Type.ToString() == interfaceName) ?? false;
-
-            if (!implemented)
-            {
-                var newBaseList = classDecl.BaseList ?? SyntaxFactory.BaseList();
-                var newType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(interfaceName));
-                var updatedBaseList = newBaseList.AddTypes(newType);
-
-                newClassDecl = classDecl.WithBaseList(updatedBaseList);
-                root = root.ReplaceNode(classDecl, newClassDecl);
-            }
-
-            return document.WithSyntaxRoot(root);
         }
 
         public static ClassDeclarationSyntax AddInterfaceImplementation(
