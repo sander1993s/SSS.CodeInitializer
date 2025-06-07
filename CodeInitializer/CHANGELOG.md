@@ -1,5 +1,14 @@
 ﻿# Changelog
 
+## [1.0.1] - 2025-06-07
+
+- Initializing object properties in a class without an interface no longer shows Interface generation refactorings.
+- Generating an interface in a new file now also adds the required using directives.
+- Generating an interface in a new file now also correctly adds the interface to the original class declaration.
+- Updated Visual Studio dependencies to default Visual Studio 2022 version.
+
+---
+
 ## [1.0.0] - 2025-05-29
 
 ### 🚀 Initial Release
