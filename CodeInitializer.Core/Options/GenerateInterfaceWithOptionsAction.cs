@@ -9,7 +9,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CodeInitializer.CodeAnalysis
+namespace CodeInitializer
 {
     public class GenerateInterfaceWithOptionsAction<T> : CodeActionWithOptions where T : class
     {

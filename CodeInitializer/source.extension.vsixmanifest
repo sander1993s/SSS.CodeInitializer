@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="CodeInitializer.49bbc154-1981-4967-a6ef-c20373f7062d" Version="1.0.0" Language="en-US" Publisher="Smet Software Solutions" />
+        <Identity Id="CodeInitializer.49bbc154-1981-4967-a6ef-c20373f7062d" Version="1.0.1" Language="en-US" Publisher="Smet Software Solutions" />
         <DisplayName>C# Code Initializer</DisplayName>
         <Description xml:space="preserve">Generate Interfaces and Initialize Properties – C# Productivity Tools
 
@@ -13,8 +13,6 @@ A Visual Studio extension to generate interfaces from your C# classes (with full
         <Tags>
             C# interface interface-generator code-generation property-initializer object-initializer refactoring productivity roslyn visual-studio developer-tools code-fix code-actions
         </Tags>
-
-        <Preview>true</Preview>
     </Metadata>
     <Installation>
         <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0, 18.0)">
@@ -34,8 +32,9 @@ A Visual Studio extension to generate interfaces from your C# classes (with full
         <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.0,18.0)" DisplayName="Visual Studio core editor" />
     </Prerequisites>
     <Assets>
-        <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" Path="|%CurrentProject%|" />
+        <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" Path="|CodeInitializer.Core|" d:ProjectName="%CurrentProject%.Core" />
 
         <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" d:ProjectName="%CurrentProject%" Path="|%CurrentProject%;PkgdefProjectOutputGroup|" />
     </Assets>
+
 </PackageManifest>

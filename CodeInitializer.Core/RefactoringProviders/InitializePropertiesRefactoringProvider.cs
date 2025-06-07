@@ -1,13 +1,13 @@
-﻿using Microsoft.CodeAnalysis.CodeActions;
+﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeRefactorings;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Composition;
-using System.Threading.Tasks;
 using System.Linq;
+using System.Threading.Tasks;
 
-namespace SSS.CodeInitializer.Analysis
+namespace CodeInitializer
 {
     [ExportCodeRefactoringProvider(LanguageNames.CSharp, Name = nameof(InitializePropertiesRefactoringProvider)), Shared]
     public class InitializePropertiesRefactoringProvider : CodeRefactoringProvider

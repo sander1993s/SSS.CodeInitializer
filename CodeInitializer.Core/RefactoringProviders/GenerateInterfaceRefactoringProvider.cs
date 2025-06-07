@@ -1,5 +1,4 @@
-﻿using CodeInitializer.CodeAnalysis;
-using CodeInitializer.Models;
+﻿using CodeInitializer.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeRefactorings;
@@ -13,7 +12,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SSS.CodeInitializer.Analysis
+namespace CodeInitializer
 {
     [ExportCodeRefactoringProvider(LanguageNames.CSharp, Name = nameof(GenerateInterfaceRefactoringProvider)), Shared]
     public class GenerateInterfaceRefactoringProvider : CodeRefactoringProvider
@@ -23,8 +22,11 @@ namespace SSS.CodeInitializer.Analysis
             var document = context.Document;
             var root = await document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
             var node = root.FindNode(context.Span);
-            var classDecl = node.FirstAncestorOrSelf<ClassDeclarationSyntax>();
-            if (classDecl == null || classDecl.Modifiers.Any(SyntaxKind.StaticKeyword))
+
+            if (!(node is ClassDeclarationSyntax classDecl))
+                return;
+
+            if (classDecl.Modifiers.Any(SyntaxKind.StaticKeyword))
                 return;
 
             var semanticModel = await document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
